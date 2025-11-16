@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+
+# Environment variables (contains secret keys)
+.env
+
+# Build output folder for the frontend
+client/dist
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
