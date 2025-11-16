@@ -1,11 +1,13 @@
 import React from 'react';
-import { Nav, Button } from 'react-bootstrap';
+import { Nav, Button, Badge } from 'react-bootstrap';
 import { LinkContainer } from 'react-router-bootstrap';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { useSocket } from '../context/SocketContext';
 
 const Sidebar = ({ isSidebarOpen, toggleSidebar }) => {
     const { user, logout } = useAuth();
+    const { unreadCount } = useSocket(); // 👈 get total unread messages
     const navigate = useNavigate();
 
     const handleLogout = () => {
@@ -24,8 +26,8 @@ const Sidebar = ({ isSidebarOpen, toggleSidebar }) => {
             {/* Top Branding */}
             <div className="d-flex justify-content-between align-items-center mb-3 sidebar-top">
                 <div>
-                    <div className="sidebar-title">PWMS </div>
-                    <div className="sidebar-subtitle">Offical Portal</div>
+                    <div className="sidebar-title">Project CRM</div>
+                    <div className="sidebar-subtitle">Internal Portal</div>
                 </div>
                 {/* Close button only on mobile */}
                 <Button
@@ -46,8 +48,13 @@ const Sidebar = ({ isSidebarOpen, toggleSidebar }) => {
                 </LinkContainer>
 
                 <LinkContainer to="/chat">
-                    <Nav.Link className="sidebar-link" onClick={handleNavClick}>
-                        Chat
+                    <Nav.Link className="sidebar-link d-flex justify-content-between align-items-center" onClick={handleNavClick}>
+                        <span>Chat</span>
+                        {unreadCount > 0 && (
+                            <Badge pill bg="danger">
+                                {unreadCount}
+                            </Badge>
+                        )}
                     </Nav.Link>
                 </LinkContainer>
 
