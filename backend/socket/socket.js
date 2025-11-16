@@ -14,7 +14,7 @@ const io = new Server(server, {
     cors: {
         origin: (origin, callback) => {
             // Read whitelist from env or default
-            const rawWhitelist = process.env.CORS_WHITELIST || 'http://localhost:5173,http://localhost:3000,https://crmyashnema1.netlify.app';
+            const rawWhitelist = process.env.CORS_WHITELIST || 'http://localhost:5173';
             const whitelist = rawWhitelist.split(',').map(s => s.trim());
             
             if (!origin || whitelist.includes(origin)) {

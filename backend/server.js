@@ -21,7 +21,7 @@ dotenv.config();
 connectDB(); // Connect to MongoDB
 
 // Read whitelist from env or default
-const rawWhitelist = process.env.CORS_WHITELIST || 'http://localhost:5173,http://localhost:3000,https://crmyashnema1.netlify.app';
+const rawWhitelist = process.env.CORS_WHITELIST || 'http://localhost:5173';
 const whitelist = rawWhitelist.split(',').map(s => s.trim());
 
 const corsOptions = {
