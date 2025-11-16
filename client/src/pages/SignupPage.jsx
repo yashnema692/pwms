@@ -79,7 +79,7 @@ const SignupPage = () => {
                 </Card.Body>
             </Card>
             <footer className="login-page-footer">
-                &copy; {new Date().getFullYear()} Project PWMS 
+                &copy; {new Date().getFullYear()} Project PWMS | Managed by Yash Nema 
             </footer>
         </div>
     );

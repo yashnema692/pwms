@@ -31,7 +31,7 @@ const LoginPage = () => {
         <div className="login-page-wrapper">
             <Card className="gov-login-card">
                 <Card.Header className="gov-login-header">
-                    <h2 className="gov-login-header-title">Project CRM Portal</h2>
+                    <h2 className="gov-login-header-title">Project PWMS Portal</h2>
                     <p className="gov-login-header-subtitle">Official User Login</p>
                 </Card.Header>
 
@@ -78,7 +78,7 @@ const LoginPage = () => {
             </Card>
 
             <footer className="login-page-footer">
-                &copy; {new Date().getFullYear()} Project CRM | Managed by Yash Nema
+                &copy; {new Date().getFullYear()} Project PWMS | Managed by Yash Nema
             </footer>
         </div>
     );
