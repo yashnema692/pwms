@@ -18,11 +18,20 @@ const messageSchema = new mongoose.Schema({
     },
     content: {
         type: String,
-        required: true,
+        default: "", // Can be empty if sending just a file
     },
-    isRead: { // <-- ADD THIS
-        type: Boolean,
-        default: false,
+    fileUrl: {
+        type: String,
+        default: "",
+    },
+    fileType: {
+        type: String, // 'image', 'video', 'application'
+        default: "",
+    },
+    status: {
+        type: String,
+        enum: ['sent', 'delivered', 'seen'],
+        default: 'sent',
     },
 }, { timestamps: true });
 
