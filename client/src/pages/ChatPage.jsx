@@ -1,11 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
-import { Row, Col, ListGroup, Form, Button, Card } from 'react-bootstrap';
+import { Row, Col, ListGroup, Form, Button, Card, Dropdown, Modal } from 'react-bootstrap';
 import { format } from 'date-fns';
 import { useSocket } from '../context/SocketContext';
 import { toast } from 'react-toastify';
-import { BsCheck, BsCheckAll, BsPaperclip } from 'react-icons/bs';
+import { 
+    BsCheck, 
+    BsCheckAll, 
+    BsPaperclip, 
+    BsThreeDotsVertical, 
+    BsPencil, 
+    BsTrash 
+} from 'react-icons/bs';
 
 const ChatPage = () => {
     const { user } = useAuth();
@@ -19,6 +26,11 @@ const ChatPage = () => {
     const [isTyping, setIsTyping] = useState(false);
     const [isReceiverTyping, setIsReceiverTyping] = useState(false);
     
+    // --- NEW STATE FOR EDITING ---
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [msgToEdit, setMsgToEdit] = useState(null);
+    const [editContent, setEditContent] = useState('');
+
     const messagesEndRef = useRef(null);
     const typingTimeoutRef = useRef(null);
     const fileInputRef = useRef(null);
@@ -34,7 +46,7 @@ const ChatPage = () => {
         fetchUsers();
     }, [user._id]);
 
-    // 2. Load Chat & Mark as Seen (Initial Load)
+    // 2. Load Chat & Mark as Seen
     useEffect(() => {
         if (selectedUser) {
             setChattingWith(selectedUser._id);
@@ -43,7 +55,6 @@ const ChatPage = () => {
                     const { data } = await api.get(`/api/messages/${selectedUser._id}`);
                     setMessages(data);
                     
-                    // Mark messages as seen immediately upon opening
                     await api.put('/api/messages/status', {
                         conversationId: data.length > 0 ? data[0].conversationId : null,
                         status: 'seen'
@@ -55,17 +66,14 @@ const ChatPage = () => {
         return () => { setChattingWith(null); setIsReceiverTyping(false); };
     }, [selectedUser, setChattingWith]);
 
-    // 3. Socket Listeners (The Real-Time Magic)
+    // 3. Socket Listeners
     useEffect(() => {
         if (!socket) return;
 
-        // A. Handle Incoming Message
+        // A. Incoming Message
         const handleNewMessage = (message) => {
-            // Only add message if it belongs to the current conversation
             if (selectedUser && message.sender._id === selectedUser._id) {
                 setMessages((prev) => [...prev, message]);
-                
-                // If I'm looking at this chat, tell backend I saw it immediately
                 api.put('/api/messages/status', {
                     conversationId: message.conversationId,
                     status: 'seen'
@@ -73,13 +81,11 @@ const ChatPage = () => {
             }
         };
 
-        // B. Handle Status Update (Blue Ticks)
+        // B. Status Updates
         const handleStatusUpdate = ({ status, updatedBy }) => {
-            // If the person I'm chatting with (selectedUser) triggered this update
             if (selectedUser && updatedBy === selectedUser._id) {
                 setMessages((prev) => 
                     prev.map((msg) => {
-                        // Update MY messages that are not yet 'seen'
                         if (msg.sender._id === user._id && msg.status !== 'seen') {
                             return { ...msg, status: status };
                         }
@@ -89,7 +95,7 @@ const ChatPage = () => {
             }
         };
 
-        // C. Typing Indicators
+        // C. Typing
         const handleTyping = ({ senderId }) => {
             if (selectedUser && senderId === selectedUser._id) setIsReceiverTyping(true);
         };
@@ -97,16 +103,38 @@ const ChatPage = () => {
             if (selectedUser && senderId === selectedUser._id) setIsReceiverTyping(false);
         };
 
+        // D. Handle Message Deletion (NEW)
+        const handleMessageDeleted = ({ messageId }) => {
+            setMessages((prev) => prev.map(msg => 
+                msg._id === messageId 
+                ? { ...msg, isDeleted: true, content: "This message was deleted", fileUrl: "" } 
+                : msg
+            ));
+        };
+
+        // E. Handle Message Edit (NEW)
+        const handleMessageEdited = ({ messageId, newContent }) => {
+            setMessages((prev) => prev.map(msg => 
+                msg._id === messageId 
+                ? { ...msg, isEdited: true, content: newContent } 
+                : msg
+            ));
+        };
+
         socket.on('newMessage', handleNewMessage);
         socket.on('messageStatusUpdate', handleStatusUpdate);
         socket.on('userTyping', handleTyping);
         socket.on('userStoppedTyping', handleStopTyping);
+        socket.on('messageDeleted', handleMessageDeleted); // Listen
+        socket.on('messageEdited', handleMessageEdited);   // Listen
 
         return () => {
             socket.off('newMessage', handleNewMessage);
             socket.off('messageStatusUpdate', handleStatusUpdate);
             socket.off('userTyping', handleTyping);
             socket.off('userStoppedTyping', handleStopTyping);
+            socket.off('messageDeleted', handleMessageDeleted);
+            socket.off('messageEdited', handleMessageEdited);
         };
     }, [socket, selectedUser, user]);
 
@@ -132,15 +160,13 @@ const ChatPage = () => {
             setMessages((prev) => [...prev, data]);
             setNewMessage('');
             setFile(null);
-            
             socket.emit('stopTyping', { receiverId: selectedUser._id });
         } catch (err) { toast.error('Failed to send'); }
     };
 
-    // 5. Handle Typing Input
+    // 5. Typing Input Handler
     const handleInputChange = (e) => {
         setNewMessage(e.target.value);
-
         if (!socket || !selectedUser) return;
 
         if (!isTyping) {
@@ -155,6 +181,44 @@ const ChatPage = () => {
         }, 2000);
     };
 
+    // --- NEW: EDIT/DELETE HANDLERS ---
+    
+    // Check if message is within 1 hour limit (3600000 ms)
+    const isWithinTimeLimit = (createdAt) => {
+        return (new Date() - new Date(createdAt)) < 3600000;
+    };
+
+    const handleDeleteMessage = async (msgId) => {
+        if (!window.confirm("Delete this message for everyone?")) return;
+        try {
+            await api.delete(`/api/messages/${msgId}`);
+            // Optimistic update
+            setMessages(prev => prev.map(m => m._id === msgId ? { ...m, isDeleted: true, content: "This message was deleted", fileUrl: "" } : m));
+            toast.success("Message deleted");
+        } catch (err) {
+            toast.error(err.response?.data?.message || "Failed to delete");
+        }
+    };
+
+    const openEditModal = (msg) => {
+        setMsgToEdit(msg);
+        setEditContent(msg.content);
+        setShowEditModal(true);
+    };
+
+    const handleSaveEdit = async () => {
+        if (!msgToEdit) return;
+        try {
+            await api.put(`/api/messages/${msgToEdit._id}`, { newContent: editContent });
+            // Optimistic update
+            setMessages(prev => prev.map(m => m._id === msgToEdit._id ? { ...m, isEdited: true, content: editContent } : m));
+            setShowEditModal(false);
+            toast.success("Message edited");
+        } catch (err) {
+            toast.error(err.response?.data?.message || "Failed to edit");
+        }
+    };
+
     const renderTicks = (msg) => {
         if (msg.sender._id !== user._id) return null;
         if (msg.status === 'sent') return <BsCheck className="text-secondary" title="Sent" />;
@@ -165,6 +229,7 @@ const ChatPage = () => {
 
     return (
         <Row className="chat-page-row h-100">
+            {/* Sidebar */}
             <Col md={4} className="chat-sidebar border-end">
                 <ListGroup variant="flush">
                     {users.map((u) => (
@@ -185,6 +250,7 @@ const ChatPage = () => {
                 </ListGroup>
             </Col>
 
+            {/* Chat Window */}
             <Col md={8} className="chat-window p-0">
                 {selectedUser ? (
                     <Card className="h-100 border-0 rounded-0">
@@ -200,28 +266,69 @@ const ChatPage = () => {
                         <Card.Body className="chat-body overflow-auto" style={{ backgroundColor: '#e5ddd5' }}>
                             {messages.map((msg, idx) => {
                                 const isOwn = msg.sender._id === user._id;
+                                const canEdit = isOwn && !msg.isDeleted && isWithinTimeLimit(msg.createdAt);
+
                                 return (
                                     <div key={idx} className={`d-flex mb-2 ${isOwn ? 'justify-content-end' : 'justify-content-start'}`}>
-                                        <div className={`p-2 rounded shadow-sm ${isOwn ? 'bg-success text-white' : 'bg-white'}`} style={{ maxWidth: '70%' }}>
+                                        <div 
+                                            className={`p-2 rounded shadow-sm position-relative ${isOwn ? 'bg-success text-white' : 'bg-white'}`} 
+                                            style={{ maxWidth: '70%', minWidth: '120px' }}
+                                        >
                                             
-                                            {msg.fileUrl && (
-                                                <div className="mb-2">
-                                                    {msg.fileType === 'image' || msg.fileType === 'video' ? (
-                                                        <img src={`http://localhost:5001${msg.fileUrl}`} alt="attachment" className="img-fluid rounded" />
-                                                    ) : (
-                                                        <a href={`http://localhost:5001${msg.fileUrl}`} target="_blank" rel="noreferrer" className="text-decoration-none text-reset">
-                                                            📄 Attachment
-                                                        </a>
-                                                    )}
+                                            {/* CONTENT LOGIC */}
+                                            {msg.isDeleted ? (
+                                                <div className="fst-italic opacity-75">
+                                                    <BsTrash className="me-1" size={12}/> This message was deleted
                                                 </div>
+                                            ) : (
+                                                <>
+                                                    {msg.fileUrl && (
+                                                        <div className="mb-2">
+                                                            {msg.fileType === 'image' || msg.fileType === 'video' ? (
+                                                                <img src={`http://localhost:5001${msg.fileUrl}`} alt="attachment" className="img-fluid rounded" />
+                                                            ) : (
+                                                                <a href={`http://localhost:5001${msg.fileUrl}`} target="_blank" rel="noreferrer" className="text-decoration-none text-reset">
+                                                                    📄 Attachment
+                                                                </a>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                    <p className="mb-1">{msg.content}</p>
+                                                </>
                                             )}
 
-                                            {msg.content && <p className="mb-1">{msg.content}</p>}
-                                            
+                                            {/* FOOTER INFO */}
                                             <div className={`d-flex align-items-center justify-content-end small ${isOwn ? 'text-white-50' : 'text-muted'}`}>
+                                                {msg.isEdited && !msg.isDeleted && (
+                                                    <span className="me-2 fst-italic" style={{fontSize: '0.75rem'}}>Edited</span>
+                                                )}
                                                 <span className="me-1">{format(new Date(msg.createdAt), 'HH:mm')}</span>
                                                 {isOwn && <span className="fs-5 lh-1">{renderTicks(msg)}</span>}
                                             </div>
+
+                                            {/* DROPDOWN MENU (Only for own messages, not deleted, within time limit) */}
+                                            {canEdit && (
+                                                <div className="position-absolute top-0 end-0 m-1">
+                                                    <Dropdown align="end">
+                                                        <Dropdown.Toggle 
+                                                            as="div" 
+                                                            className="px-1"
+                                                            style={{ cursor: 'pointer', opacity: 0.7 }}
+                                                        >
+                                                            <BsThreeDotsVertical size={14} color={isOwn ? 'white' : 'black'} />
+                                                        </Dropdown.Toggle>
+
+                                                        <Dropdown.Menu size="sm">
+                                                            <Dropdown.Item onClick={() => openEditModal(msg)}>
+                                                                <BsPencil className="me-2"/> Edit
+                                                            </Dropdown.Item>
+                                                            <Dropdown.Item onClick={() => handleDeleteMessage(msg._id)} className="text-danger">
+                                                                <BsTrash className="me-2"/> Delete
+                                                            </Dropdown.Item>
+                                                        </Dropdown.Menu>
+                                                    </Dropdown>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 );
@@ -229,6 +336,7 @@ const ChatPage = () => {
                             <div ref={messagesEndRef} />
                         </Card.Body>
 
+                        {/* Input Footer */}
                         <Card.Footer className="bg-white border-top">
                             {file && (
                                 <div className="mb-2 p-2 bg-light border rounded position-relative">
@@ -255,7 +363,6 @@ const ChatPage = () => {
                                     className="rounded-pill border-0 bg-light me-2"
                                 />
                                 <Button type="submit" variant="success" className="rounded-circle d-flex align-items-center justify-content-center" style={{ width: '40px', height: '40px' }}>
-                                    {/* Send Icon (SVG) */}
                                     <svg viewBox="0 0 24 24" width="24" height="24" fill="white">
                                         <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
                                     </svg>
@@ -267,6 +374,25 @@ const ChatPage = () => {
                     <div className="d-flex h-100 justify-content-center align-items-center text-muted">Select a chat to start messaging</div>
                 )}
             </Col>
+
+            {/* EDIT MODAL */}
+            <Modal show={showEditModal} onHide={() => setShowEditModal(false)} centered>
+                <Modal.Header closeButton>
+                    <Modal.Title>Edit Message</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    <Form.Control 
+                        as="textarea"
+                        rows={3}
+                        value={editContent} 
+                        onChange={(e) => setEditContent(e.target.value)} 
+                    />
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant="secondary" onClick={() => setShowEditModal(false)}>Cancel</Button>
+                    <Button variant="primary" onClick={handleSaveEdit}>Save Changes</Button>
+                </Modal.Footer>
+            </Modal>
         </Row>
     );
 };

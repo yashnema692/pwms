@@ -20,7 +20,6 @@ export const sendMessage = async (req, res) => {
             fileUrl = `/uploads/${req.file.filename}`; 
             
             // simple check: image vs other
-            // req.file.mimetype looks like "image/jpeg" or "application/pdf"
             const mime = req.file.mimetype.split('/')[0];
             fileType = mime === 'image' || mime === 'video' ? mime : 'file'; 
         }
@@ -46,7 +45,7 @@ export const sendMessage = async (req, res) => {
             conversationId: conversation._id,
             sender: senderId,
             receiver: receiverId,
-            content: content || "", // Content might be empty if just sending a file
+            content: content || "", 
             fileUrl,
             fileType,
             status: initialStatus
@@ -129,7 +128,6 @@ export const updateMessageStatus = async (req, res) => {
         );
 
         // Notify the SENDER that I have seen their messages
-        // We need to find who the "other" person is in this conversation
         const conversation = await Conversation.findById(conversationId);
         if (conversation) {
             const senderId = conversation.participants.find(
@@ -156,13 +154,12 @@ export const updateMessageStatus = async (req, res) => {
     }
 };
 
-// @desc    Get total unread message count (Legacy/Simple)
+// @desc    Get total unread message count
 // @route   GET /api/messages/unread/count
 // @access  Private
 export const getUnreadCount = async (req, res) => {
     try {
         const userId = req.user._id;
-        // Count messages where I am receiver AND status is NOT 'seen'
         const count = await Message.countDocuments({
             receiver: userId,
             status: { $ne: 'seen' } 
@@ -181,7 +178,6 @@ export const getUnreadCountsBySender = async (req, res) => {
     try {
         const receiverId = req.user._id;
         
-        // Use aggregation to find unread messages (status != 'seen') and group by sender
         const counts = await Message.aggregate([
             { 
                 $match: { 
@@ -223,6 +219,93 @@ export const clearChatHistory = async (req, res) => {
         await Message.deleteMany({ conversationId: conversation._id });
 
         res.status(200).json({ message: 'Chat history cleared' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server Error' });
+    }
+};
+
+// --- NEW FUNCTION: DELETE MESSAGE ---
+// @desc    Soft delete a message (within 1 hour)
+// @route   DELETE /api/messages/:id
+// @access  Private
+export const deleteMessage = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user._id;
+
+        const message = await Message.findById(id);
+        if (!message) return res.status(404).json({ message: 'Message not found' });
+
+        // 1. Check Ownership
+        if (message.sender.toString() !== userId.toString()) {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
+
+        // 2. Check Time Limit (1 Hour = 3600000 ms)
+        const timeDiff = Date.now() - new Date(message.createdAt).getTime();
+        if (timeDiff > 3600000) { 
+            return res.status(400).json({ message: 'You can only delete messages within 1 hour' });
+        }
+
+        // 3. Perform Soft Delete
+        message.isDeleted = true;
+        message.content = "This message was deleted"; 
+        message.fileUrl = ""; // Remove attachment
+        await message.save();
+
+        // 4. Notify Receiver via Socket
+        const receiverSocketId = getSocketId(message.receiver);
+        if (receiverSocketId) {
+            io.to(receiverSocketId).emit('messageDeleted', { messageId: id });
+        }
+
+        res.json({ message: 'Message deleted', messageId: id });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server Error' });
+    }
+};
+
+// --- NEW FUNCTION: EDIT MESSAGE ---
+// @desc    Edit a message (within 1 hour)
+// @route   PUT /api/messages/:id
+// @access  Private
+export const editMessage = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { newContent } = req.body;
+        const userId = req.user._id;
+
+        const message = await Message.findById(id);
+        if (!message) return res.status(404).json({ message: 'Message not found' });
+
+        // 1. Check Ownership
+        if (message.sender.toString() !== userId.toString()) {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
+
+        // 2. Check Time Limit
+        const timeDiff = Date.now() - new Date(message.createdAt).getTime();
+        if (timeDiff > 3600000) {
+            return res.status(400).json({ message: 'Edit time limit exceeded (1 hour)' });
+        }
+
+        // 3. Update Content
+        message.content = newContent;
+        message.isEdited = true;
+        await message.save();
+
+        // 4. Notify Receiver
+        const receiverSocketId = getSocketId(message.receiver);
+        if (receiverSocketId) {
+            io.to(receiverSocketId).emit('messageEdited', { 
+                messageId: id, 
+                newContent: newContent 
+            });
+        }
+
+        res.json(message);
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server Error' });
