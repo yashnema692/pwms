@@ -17,7 +17,7 @@ import userRoutes from './routes/userRoutes.js';
 import teamRoutes from './routes/teamRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
 import noteRoutes from './routes/noteRoutes.js'; 
-
+import attendanceRoutes from './routes/attendanceRoutes.js';
 dotenv.config();
 connectDB(); // Connect to MongoDB
 
@@ -60,6 +60,7 @@ app.use('/api/teams', teamRoutes);
 app.use('/api/messages', messageRoutes); // Handles Edit/Delete logic internally
 app.use('/api/notes', noteRoutes);       // Handles Announcements
 
+app.use('/api/attendance', attendanceRoutes);
 const PORT = process.env.PORT || 5001;
 
 // Use the 'server' from socket.js to listen (required for Socket.io)
