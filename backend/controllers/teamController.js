@@ -58,7 +58,6 @@ export const deleteTeam = async (req, res) => {
     try {
         const team = await Team.findById(req.params.id);
         if (team) {
-            // Add logic here to handle projects assigned to this team
             await team.deleteOne();
             res.json({ message: 'Team removed' });
         } else {
@@ -68,3 +67,29 @@ export const deleteTeam = async (req, res) => {
         res.status(500).json({ message: 'Server Error' });
     }
 };
+
+// --- ADD THIS FUNCTION TO FIX THE 404 ERROR ---
+// @desc    Get single team by ID
+// @route   GET /api/teams/:id
+// @access  Private
+export const getTeamById = async (req, res) => {
+    try {
+        const team = await Team.findById(req.params.id)
+            .populate('members', 'email')
+            .populate('createdBy', 'email');
+
+        if (team) {
+            res.json(team);
+        } else {
+            res.status(404).json({ message: 'Team not found' });
+        }
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server Error' });
+    }
+};
+
+// --- ADD THIS AT THE BOTTOM ---
+// @desc    Get single team by ID
+// @route   GET /api/teams/:id
+// @access  Private

@@ -10,6 +10,7 @@ import { useAuth } from './context/AuthContext';
 import AdminUserManagement from './pages/AdminUserManagement';
 import AdminTeamManagement from './pages/AdminTeamManagement';
 import ChatPage from './pages/ChatPage';
+import UserTeamView from './pages/UserTeamView'; // <--- IMPORT THIS
 import Layout from './components/Layout';
 
 function App() {
@@ -64,6 +65,9 @@ function App() {
                             </ProtectedRoute>
                         }
                     />
+
+                    {/* --- NEW ROUTE FOR VIEWING TEAMS --- */}
+                    <Route path="teams/:id" element={<UserTeamView />} />
 
                     <Route
                         path="audit-log"
