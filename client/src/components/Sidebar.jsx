@@ -58,7 +58,12 @@ const Sidebar = ({ isSidebarOpen, toggleSidebar }) => {
                     &times;
                 </Button>
             </div>
-
+            {/* Place this wherever you want in the list, maybe under Chat */}
+<LinkContainer to="/announcements">
+    <Nav.Link className="sidebar-link" onClick={handleNavClick}>
+        📢 Announcements
+    </Nav.Link>
+</LinkContainer>
             {/* Navigation links */}
             <div className="sidebar-links">
                 <LinkContainer to="/dashboard">

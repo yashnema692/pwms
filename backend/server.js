@@ -17,7 +17,7 @@ import auditLogRoutes from './routes/auditLogRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import teamRoutes from './routes/teamRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
-
+import noteRoutes from './routes/noteRoutes.js'; 
 dotenv.config();
 connectDB(); // Connect to MongoDB
 
@@ -59,7 +59,7 @@ app.use('/api/audit', auditLogRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/teams', teamRoutes);
 app.use('/api/messages', messageRoutes);
-
+app.use('/api/notes', noteRoutes); 
 const PORT = process.env.PORT || 5001;
 // Use the 'server' from socket.js to listen, not 'app'
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));

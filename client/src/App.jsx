@@ -10,8 +10,9 @@ import { useAuth } from './context/AuthContext';
 import AdminUserManagement from './pages/AdminUserManagement';
 import AdminTeamManagement from './pages/AdminTeamManagement';
 import ChatPage from './pages/ChatPage';
-import UserTeamView from './pages/UserTeamView'; // <--- IMPORT THIS
+import UserTeamView from './pages/UserTeamView';
 import Layout from './components/Layout';
+import AnnouncementsPage from './pages/AnnouncementsPage'; // <--- IMPORT THIS
 
 function App() {
     const { user, loading } = useAuth();
@@ -66,8 +67,11 @@ function App() {
                         }
                     />
 
-                    {/* --- NEW ROUTE FOR VIEWING TEAMS --- */}
+                    {/* View Teams Route */}
                     <Route path="teams/:id" element={<UserTeamView />} />
+
+                    {/* --- NEW ANNOUNCEMENTS ROUTE --- */}
+                    <Route path="announcements" element={<AnnouncementsPage />} />
 
                     <Route
                         path="audit-log"
